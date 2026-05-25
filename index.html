@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Professional Invoice Generator</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- PDF Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js"></script>
+
+    <!-- QR Code Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+    <style>
+        body {
+            background: #f4f7fb;
+        }
+
+        input, textarea, select {
+            outline: none;
+        }
+
+        .a4-paper {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+        }
+
+        @media print {
+            body {
+                background: white;
+            }
+
+            .no-print {
+                display: none !important;
+            }
+
+            #invoicePreview {
+                box-shadow: none !important;
+                border: none !important;
+                border-radius: 0 !important;
+                max-width: 100% !important;
+                margin: 0 !important;
+            }
+        }
+    </style>
+</head>
+
+<body class="min-h-screen text-slate-800">
+
+<!-- Sticky Action Bar -->
+<header class="no-print bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-blue-900">Invoice Generator</h1>
+            <p class="text-sm text-slate-500">Create, edit, save, import, print, and download professional invoices.</p>
+        </div>
+
+        <div class="flex flex-wrap gap-2">
+            <button onclick="addItemRow()" class="bg-blue-900 hover:bg-blue-800 text-white px-4 py-2 rounded-lg text-sm font-medium">
+                + Add Item
+            </button>
+
+            <button onclick="addPriceColumn()" class="border border-blue-900 text-blue-900 hover:bg-blue-50 px-4 py-2 rounded-lg text-sm font-medium">
+                + Add Column
+            </button>
+
+            <button onclick="downloadDraftJSON()" class="border border-slate-700 text-slate-700 hover:bg-slate-50 px-4 py-2 rounded-lg text-sm font-medium">
+                Save Draft
+            </button>
+
+            <label class="border border-slate-700 text-slate-700 hover:bg-slate-50 px-4 py-2 rounded-lg text-sm font-medium cursor-pointer">
+                Import Draft
+                <input type="file" accept=".json" class="hidden" onchange="importDraftJSON(event)">
+            </label>
+
+            <button onclick="printInvoice()" class="border border-green-700 text-green-700 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-medium">
+                Print
+            </button>
+
+            <button onclick="downloadPDF()" class="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-medium">
+                Download PDF
+            </button>
+
+            <button onclick="clearInvoice()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
+                Clear
+            </button>
+        </div>
+    </div>
+</header>
+
+<main class="max-w-7xl mx-auto px-4 py-8 space-y-8">
+
+    <!-- Dashboard Summary -->
+    <section class="no-print grid grid-cols-1 md:grid-cols-4 gap-5">
+        <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+            <p class="text-sm text-slate-500">Total Items</p>
+            <h3 id="summaryTotalItems" class="text-2xl font-bold text-blue-900 mt-1">0</h3>
+        </div>
+
+        <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+            <p class="text-sm text-slate-500">Subtotal</p>
+            <h3 id="summarySubtotal" class="text-2xl font-bold text-slate-900 mt-1">Rs. 0.00</h3>
+        </div>
+
+        <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+            <p class="text-sm text-slate-500">Discount</p>
+            <h3 id="summaryDiscount" class="text-2xl font-bold text-red-600 mt-1">Rs. 0.00</h3>
+        </div>
+
+        <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+            <p class="text-sm text-slate-500">Grand Total</p>
+            <h3 id="summaryGrandTotal" class="text-2xl font-bold text-green-700 mt-1">Rs. 0.00</h3>
+        </div>
+    </section>
+
+    <!-- 01 Business Details -->
+    <section class="no-print bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+        <h2 class="text-xl font-bold text-blue-900 mb-1">01 Business Details</h2>
+        <p class="text-sm text-slate-500 mb-5">Enter your business information.</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div>
+                <label class="text-sm font-medium">Business Name</label>
+                <input id="businessName" type="text" placeholder="Your business name"
+                       class="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 focus:border-blue-900"
+                       oninput="updateInvoice()">
+            </div>
+
+            <div>
+                <label class="text-sm font-medium">Business Phone</label>
+                <input id="businessPhone" type="text" placeholder="Business phone number"
+                       class="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 focus:border-blue-900"
+                       oninput="updateInvoice()">
+            </div>
+
+            <div>
+                <label class="text-sm font-medium">Business Email Optional</label>
+                <input id="businessEmail" type="text" placeholder="Business email"
+                       class="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 focus:border-blue-900"
+                       oninput="updateInvoice()">
+            </div>
+
+            <div>
+                <label class="text-sm font-medium">Business Logo Optional</label>
+                <input id="businessLogo" type="file" accept="image/*"
+                       class="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2"
+                       onchange="loadLogo(event)">
+            </div>
+
+            <div class="md:col-span-2">
+                <label class="text-sm font-medium">Business Address</label>
+                <textarea id="businessAddress" rows="3" placeholder="Business address"
+                          class="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 focus:border-blue-900"
+                          oninput="updateInvoice()"></textarea>
+            </div>
+        </div>
+    </section>
+
+    <!-- 02 Customer Details -->
+    <section class="no-print bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+        <h2 class="text-xl font-bold text-blue-900 mb-1">02 Customer Details</h2>
+        <p class="text-sm text-slate-500 mb-5">Add customer billing information.</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div>
+                <label class="text-sm font-medium">Customer Name</label>
+                <input id="customerName" type="text" placeholder="Customer name"
+                       class="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 focus:border-blue-900"
+                       oninput="updateInvoice()">
+            </div>
+
+            <div>
+                <label class="text-sm font-medium">Customer Phone</label>
+                <input id="customerPhone" type="text" placeholder="Customer phone number"
+                       class="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 focus:border-blue-900"
+                       oninput="updateInvoice()">
+            </div>
+
+            <div>
+                <label class="text-sm font-medium">Customer Email Optional</label>
+                <input id="customerEmail" type="text" placeholder="Customer email"
+                       class="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 focus:border-blue-900"
+                       oninput="updateInvoice()">
+            </div>
+
+            <div>
+                <label class="text-sm font-medium">Customer Address</label>
+                <textarea id="customerAddress" rows="3" placeholder="Customer address"
+                          class="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 focus:border-blue-900"
+                          oninput="updateInvoice()"></textarea>
+            </div>
+        </div>
+    </section>
+
+    <!-- 03 Invoice Details -->
+    <section class="no-print bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+        <h2 class="text-xl font-bold text-blue-900 mb-1">03 Invoice Details</h2>
+        <p class="text-sm text-slate-500 mb-5">Manage invoice number, date, currency, discount, and social links.</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <div>
+                <label class="text-sm font-medium">Invoice Number</label>
+                <input id="invoiceNumber" type="text"
+                       class="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 focus:border-blue-900"
+                       oninput="updateInvoice()">
+            </div>
+
+            <div>
+                <label class="text-sm font-medium">Invoice Date</label>
+                <input id="invoiceDate" type="date"
+                       class="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 focus:border-blue-900"
+                       oninput="updateInvoice()">
+            </div>
+
+            <div>
+                <label class="text-sm font-medium">Due Date Optional</label>
+                <input id="dueDate" type="date"
+                       class="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 focus:border-blue-900"
+                       oninput="updateInvoice()">
+            </div>
+
+            <div>
+                <label class="text-sm font-medium">Currency</label>
+                <input id="currency" type="text" value="Rs."
+                       class="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 focus:border-blue-900"
+                       oninput="updateInvoice()">
+            </div>
+
+            <div>
+                <label class="text-sm font-medium">Whole Invoice Discount Type</label>
+                <select id="invoiceDiscountType"
+                        class="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 focus:border-blue-900"
+                        onchange="updateInvoice()">
+                    <option value="none">No Discount</option>
+                    <option value="amount">Amount</option>
+                    <option value="percent">Percentage</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="text-sm font-medium">Whole Invoice Discount Value</label>
+                <input id="invoiceDiscountValue" type="number" min="0" value="0"
+                       class="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 focus:border-blue-900"
+                       oninput="updateInvoice()">
+            </div>
+
+            <div>
+                <label class="text-sm font-medium">Facebook Optional</label>
+                <input id="facebook" type="text" placeholder="facebook.com/yourpage"
+                       class="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 focus:border-blue-900"
+                       oninput="updateInvoice()">
+            </div>
+
+            <div>
+                <label class="text-sm font-medium">Instagram Optional</label>
+                <input id="instagram" type="text" placeholder="instagram.com/yourpage"
+                       class="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 focus:border-blue-900"
+                       oninput="updateInvoice()">
+            </div>
+
+            <div>
+                <label class="text-sm font-medium">WhatsApp Optional</label>
+                <input id="whatsapp" type="text" placeholder="WhatsApp number or link"
+                       class="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 focus:border-blue-900"
+                       oninput="updateInvoice()">
+            </div>
+        </div>
+    </section>
+
+    <!-- 04 Payment Details -->
+    <section class="no-print bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+        <h2 class="text-xl font-bold text-blue-900 mb-1">04 Payment Details</h2>
+        <p class="text-sm text-slate-500 mb-5">Optional payment information for the invoice.</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <div>
+                <label class="text-sm font-medium">Payment Method</label>
+                <select id="paymentMethod"
+                        class="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 focus:border-blue-900"
+                        onchange="updateInvoice()">
+                    <option value="">Select Method</option>
+                    <option value="Cash">Cash</option>
+                    <option value="Bank Transfer">Bank Transfer</option>
+                    <option value="Card Payment">Card Payment</option>
+                    <option value="Online Payment">Online Payment</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="text-sm font-medium">Bank Name Optional</label>
+                <input id="bankName" type="text" placeholder="Bank name"
+                       class="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 focus:border-blue-900"
+                       oninput="updateInvoice()">
+            </div>
+
+            <div>
+                <label class="text-sm font-medium">Account Name Optional</label>
+                <input id="accountName" type="text" placeholder="Account name"
+                       class="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 focus:border-blue-900"
+                       oninput="updateInvoice()">
+            </div>
+
+            <div>
+                <label class="text-sm font-medium">Account Number Optional</label>
+                <input id="accountNumber" type="text" placeholder="Account number"
+                       class="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 focus:border-blue-900"
+                       oninput="updateInvoice()">
+            </div>
+
+            <div>
+                <label class="text-sm font-medium">Branch Optional</label>
+                <input id="bankBranch" type="text" placeholder="Branch"
+                       class="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 focus:border-blue-900"
+                       oninput="updateInvoice()">
+            </div>
+
+            <div>
+                <label class="text-sm font-medium">Payment Link Optional</label>
+                <input id="paymentLink" type="text" placeholder="Payment link"
+                       class="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 focus:border-blue-900"
+                       oninput="updateInvoice()">
+            </div>
+        </div>
+    </section>
+
+    <!-- 05 Invoice Items -->
+    <section class="no-print bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+        <div class="mb-5">
+            <h2 class="text-xl font-bold text-blue-900">05 Invoice Items</h2>
+            <p class="text-sm text-slate-500">Add custom price columns, items, and item discounts.</p>
+        </div>
+
+        <div class="bg-blue-50 border border-blue-100 rounded-lg p-4 mb-5">
+            <p class="text-sm text-blue-900">
+                First click <strong>Add Column</strong> to create price types like Item Price, Packing, Delivery, Tax, or Service Charge.
+                Then click <strong>Add Item</strong>. Discount can be applied per item or directly to the whole invoice total.
+            </p>
+        </div>
+
+        <div class="overflow-x-auto w-full">
+            <table class="min-w-full border border-slate-200 text-sm">
+                <thead id="inputTableHead" class="bg-slate-100"></thead>
+                <tbody id="inputTableBody"></tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- 06 Custom Note -->
+    <section class="no-print bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+        <h2 class="text-xl font-bold text-blue-900 mb-1">06 Custom Note Optional</h2>
+        <p class="text-sm text-slate-500 mb-5">Add a note, terms, or payment instruction.</p>
+
+        <textarea id="customNote" rows="4" placeholder="Example: Thank you for your order. Payment should be completed within 7 days."
+                  class="w-full border border-slate-300 rounded-lg px-3 py-2 focus:border-blue-900"
+                  oninput="updateInvoice()"></textarea>
+    </section>
+
+    <!-- 07 Design Settings -->
+    <section class="no-print bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+        <h2 class="text-xl font-bold text-blue-900 mb-1">07 Design Settings</h2>
+        <p class="text-sm text-slate-500 mb-5">Customize the invoice style.</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-5">
+            <div>
+                <label class="text-sm font-medium">Template</label>
+                <select id="invoiceTemplate"
+                        class="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 focus:border-blue-900"
+                        onchange="applyTemplate()">
+                    <option value="royalBlue">Royal Blue</option>
+                    <option value="minimalBlack">Minimal Black</option>
+                    <option value="modernGreen">Modern Green</option>
+                    <option value="classicGray">Classic Gray</option>
+                    <option value="premiumGold">Premium Gold</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="text-sm font-medium">Theme Color</label>
+                <input id="themeColor" type="color" value="#1e3a8a"
+                       class="w-full mt-1 h-10 border border-slate-300 rounded-lg px-2 py-1"
+                       oninput="updateInvoice()">
+            </div>
+
+            <div>
+                <label class="text-sm font-medium">Logo Position</label>
+                <select id="logoPosition"
+                        class="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 focus:border-blue-900"
+                        onchange="updateInvoice()">
+                    <option value="left">Left</option>
+                    <option value="center">Center</option>
+                    <option value="right">Right</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="text-sm font-medium">QR Code Type</label>
+                <select id="qrType"
+                        class="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 focus:border-blue-900"
+                        onchange="updateInvoice()">
+                    <option value="none">No QR Code</option>
+                    <option value="whatsapp">WhatsApp</option>
+                    <option value="payment">Payment Link</option>
+                    <option value="business">Business Details</option>
+                </select>
+            </div>
+        </div>
+    </section>
+
+    <!-- 08 Invoice View -->
+    <section>
+        <h2 class="no-print text-xl font-bold text-blue-900 mb-4">08 Invoice View</h2>
+
+        <div class="no-print bg-slate-200 rounded-2xl p-6">
+            <div id="invoicePreview" class="a4-paper bg-white shadow-2xl rounded-xl overflow-hidden border border-slate-200">
+
+                <div id="previewTopBar" class="h-3 bg-blue-900"></div>
+
+                <div class="p-8">
+
+                    <!-- Invoice Header -->
+                    <div id="invoiceHeaderArea" class="flex flex-col md:flex-row md:items-start md:justify-between gap-6 border-b border-slate-200 pb-6">
+
+                        <div id="businessHeaderWrapper" class="flex items-start gap-5">
+                            <img id="previewLogo" src="" alt="Logo"
+                                 class="hidden w-36 h-36 object-contain rounded-lg border border-slate-200 p-3 bg-white">
+
+                            <div id="businessTextWrapper">
+                                <h2 id="previewBusinessName" class="text-3xl font-bold text-blue-900">
+                                    Your Business Name
+                                </h2>
+
+                                <p id="previewBusinessAddress" class="text-slate-600 mt-2 whitespace-pre-line">
+                                    Business address
+                                </p>
+
+                                <p id="previewBusinessPhone" class="text-slate-600 mt-1"></p>
+                                <p id="previewBusinessEmail" class="text-slate-600"></p>
+                            </div>
+                        </div>
+
+                        <div class="text-left md:text-right">
+                            <h1 id="previewInvoiceTitle" class="text-4xl font-extrabold text-blue-900">INVOICE</h1>
+                            <p class="mt-3 text-slate-600">
+                                Invoice No:
+                                <span id="previewInvoiceNumber" class="font-semibold text-slate-900">INV-0001</span>
+                            </p>
+                            <p class="text-slate-600">
+                                Date:
+                                <span id="previewInvoiceDate" class="font-semibold text-slate-900"></span>
+                            </p>
+                            <p id="previewDueDateLine" class="text-slate-600 hidden">
+                                Due Date:
+                                <span id="previewDueDate" class="font-semibold text-slate-900"></span>
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Customer and Summary -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 py-6">
+
+                        <div>
+                            <h3 id="billToHeading" class="text-sm uppercase tracking-wide text-blue-900 font-bold">Bill To</h3>
+                            <p id="previewCustomerName" class="text-lg font-semibold mt-2">Customer Name</p>
+                            <p id="previewCustomerPhone" class="text-slate-600 mt-1"></p>
+                            <p id="previewCustomerEmail" class="text-slate-600"></p>
+                            <p id="previewCustomerAddress" class="text-slate-600 whitespace-pre-line"></p>
+                        </div>
+
+                        <div class="bg-slate-50 rounded-xl p-5 border border-slate-200">
+                            <h3 id="summaryHeading" class="text-sm uppercase tracking-wide text-blue-900 font-bold">
+                                Payment Summary
+                            </h3>
+
+                            <div class="flex justify-between mt-4">
+                                <span class="text-slate-600">Subtotal</span>
+                                <span id="previewSubtotal" class="font-semibold">Rs. 0.00</span>
+                            </div>
+
+                            <div id="itemDiscountSummaryRow" class="flex justify-between mt-2 hidden">
+                                <span class="text-slate-600">Item Discounts</span>
+                                <span id="previewItemDiscountTotal" class="font-semibold">Rs. 0.00</span>
+                            </div>
+
+                            <div id="invoiceDiscountSummaryRow" class="flex justify-between mt-2 hidden">
+                                <span class="text-slate-600">Invoice Discount</span>
+                                <span id="previewInvoiceDiscount" class="font-semibold">Rs. 0.00</span>
+                            </div>
+
+                            <div class="flex justify-between mt-3 border-t border-slate-200 pt-3">
+                                <span class="text-slate-800 font-semibold">Grand Total</span>
+                                <span id="previewGrandTotal" class="text-2xl font-bold text-blue-900">
+                                    Rs. 0.00
+                                </span>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- Preview Table -->
+                    <div class="overflow-x-auto">
+                        <table class="w-full border-collapse text-sm">
+                            <thead id="previewTableHead" class="bg-blue-900 text-white"></thead>
+                            <tbody id="previewTableBody"></tbody>
+                        </table>
+                    </div>
+
+                    <!-- Payment Details -->
+                    <div id="previewPaymentBlock" class="hidden mt-8 bg-slate-50 rounded-xl p-5 border border-slate-200">
+                        <h3 id="paymentHeading" class="text-sm uppercase tracking-wide text-blue-900 font-bold mb-3">Payment Details</h3>
+                        <div id="previewPaymentDetails" class="text-sm text-slate-600 grid grid-cols-1 md:grid-cols-2 gap-2"></div>
+                    </div>
+
+                    <!-- Custom Note -->
+                    <div id="previewNoteBlock" class="hidden mt-8 bg-white border border-slate-200 rounded-xl p-5">
+                        <h3 id="noteHeading" class="text-sm uppercase tracking-wide text-blue-900 font-bold mb-2">Note</h3>
+                        <p id="previewCustomNote" class="text-sm text-slate-600 whitespace-pre-line"></p>
+                    </div>
+
+                    <!-- QR Code -->
+                    <div id="previewQRBlock" class="hidden mt-8 flex flex-col items-center">
+                        <div id="qrcode" class="bg-white p-2 border border-slate-200 rounded-lg"></div>
+                        <p class="text-xs text-slate-500 mt-2">Scan for details</p>
+                    </div>
+
+                    <!-- Footer -->
+                    <div class="mt-8 border-t border-slate-200 pt-6">
+
+                        <div id="previewSocialLinks" class="text-sm text-slate-600 space-y-1"></div>
+
+                        <div class="mt-6 text-center">
+                            <p id="thankYouText" class="font-semibold text-blue-900">Thank you for your business!</p>
+
+                            <div class="mt-4 text-center">
+                                <p class="text-sm text-slate-500">Invoice By</p>
+                                <p class="font-bold text-slate-900">Mohommed Najad</p>
+                                <p class="text-sm text-slate-600">076 906 8534</p>
+                            </div>
+                        </div>
+
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </section>
+
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
